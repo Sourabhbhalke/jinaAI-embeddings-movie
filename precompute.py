@@ -8,7 +8,7 @@ from datasets import load_dataset
 cos_sim = lambda a, b: (a @ b.T) / (norm(a) * norm(b))
 
 # Jina API key
-API_KEY = 'jina_4d9174d9a85a4a06a62ddcaf7ee59fa7RjwQ9weOg0_rrIIKAhV3BzbfXBiX'
+API_KEY = 'my api key here'
 
 # Load the dataset using Hugging Face Datasets
 ds = load_dataset("jinaai/jina-weaviate-hackson-movie")
