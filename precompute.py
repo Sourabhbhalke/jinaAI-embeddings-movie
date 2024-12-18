@@ -1,56 +1,59 @@
 import requests
 import numpy as np
+import pandas as pd
 from numpy.linalg import norm
-import json
+from datasets import load_dataset
 
-# Cosine Similarity function
+# Define cosine similarity function
 cos_sim = lambda a, b: (a @ b.T) / (norm(a) * norm(b))
 
-# Function to get content from Reader API
-def get_cleaned_content_from_url(url):
-    reader_url = f"https://r.jina.ai/{url}"
-    response = requests.get(reader_url)
-    if response.status_code == 200:
-        return response.json()['content']
-    else:
-        print(f"Error fetching content from {url}")
-        return None
+# Jina API key
+API_KEY = 'jina_4d9174d9a85a4a06a62ddcaf7ee59fa7RjwQ9weOg0_rrIIKAhV3BzbfXBiX'
 
-# Function to get embeddings using Jina API
-def get_embeddings(text):
-    url = 'https://api.jina.ai/v1/embeddings'
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer <YOUR_JINA_AI_API_KEY>'
-    }
-    data = {
-        'input': [{"text": text}],
-        'model': 'jina-clip-v2',
-        'encoding_type': 'float',
-        'dimensions': '768'
-    }
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        return np.array(response.json()['data'][0]['embedding'])
-    else:
-        print("Error generating embeddings.")
-        return None
+# Load the dataset using Hugging Face Datasets
+ds = load_dataset("jinaai/jina-weaviate-hackson-movie")
 
-# Example usage for fetching and embedding a movie URL
-def process_movie_url(url):
-    print(f"Fetching content from: {url}")
-    content = get_cleaned_content_from_url(url)
-    if content:
-        print("Content fetched successfully.")
-        embedding = get_embeddings(content)
-        if embedding is not None:
-            print("Embedding generated.")
-            # Save or process embedding further as needed
-        else:
-            print("Failed to generate embedding.")
-    else:
-        print("Failed to fetch content.")
-        
-# Example: Replace this with actual movie URLs
-movie_url = "https://arxiv.org/abs/2310.19923"
-process_movie_url(movie_url)
+# Sample title and wikipedia_link from the dataset (use the available columns)
+titles = ds['train']['title'][:5]  # First 5 entries in the title column
+wikipedia_links = ds['train']['wikipedia_link'][:5]  # First 5 entries in the wikipedia_link column
+
+# API endpoint for embeddings
+url = 'https://api.jina.ai/v1/embeddings'
+
+# Define headers with API key
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Bearer {API_KEY}'
+}
+
+# Prepare the data for the request
+data = {
+    'input': [
+        {"text": title, "url": link}
+        for title, link in zip(titles, wikipedia_links)
+    ],
+    'model': 'jina-clip-v2',
+    'encoding_type': 'float',
+    'dimensions': '768'
+}
+
+# Send request to Jina API to generate embeddings
+response = requests.post(url, headers=headers, json=data)
+
+# Check for successful response
+if response.status_code == 200:
+    embeddings = response.json()['data']
+    
+    # Calculate cosine similarity between first title-link pair (you can adjust this as needed)
+    title_embedding = np.array(embeddings[0]['embedding'])
+    link_embedding = np.array(embeddings[1]['embedding'])
+    sim = cos_sim(title_embedding, link_embedding)
+    print(f"Cosine title<->link similarity: {sim}")
+else:
+    print(f"Error: {response.status_code}")
+    print(response.text)
+
+# Optionally save embeddings to a file
+# Convert embeddings into a DataFrame
+embedding_df = pd.DataFrame(embeddings)
+embedding_df.to_parquet('embeddings_output.parquet')
